@@ -48,7 +48,7 @@ pub fn register_issuer(e: &Env, org: Address, bond: i128) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn issue_credential(e: &Env, issuer: Address, holder: Address, doc_hash: BytesN<32>, level: u32) -> Result<(), Error> {
+pub fn issue_credential(e: &Env, issuer: Address, holder: Address, doc_hash: BytesN<32>, level: u32, method: u32) -> Result<(), Error> {
     issuer.require_auth();
     let cfg = config(e);
     let mut iss = match load_issuer(e, &issuer) {
@@ -67,6 +67,9 @@ pub fn issue_credential(e: &Env, issuer: Address, holder: Address, doc_hash: Byt
     if !(1..=3).contains(&level) {
         return Err(Error::BadLevel);
     }
+    if !(1..=3).contains(&method) {
+        return Err(Error::BadMethod);
+    }
 
     save_credential(
         e,
@@ -75,6 +78,7 @@ pub fn issue_credential(e: &Env, issuer: Address, holder: Address, doc_hash: Byt
             issuer: issuer.clone(),
             doc_hash: doc_hash.clone(),
             level,
+            method,
             revoked: false,
             issued_at: e.ledger().timestamp(),
         },
@@ -90,16 +94,31 @@ pub fn issue_credential(e: &Env, issuer: Address, holder: Address, doc_hash: Byt
 pub fn verify(e: &Env, holder: Address) -> VerifyResult {
     match load_credential(e, &holder) {
         Some(c) => {
-            let bond = load_issuer(e, &c.issuer).map(|i| i.bond).unwrap_or(0);
-            VerifyResult { verified: !c.revoked, level: c.level, issuer: c.issuer, issuer_bond: bond, revoked: c.revoked }
+            let (bond, active) = load_issuer(e, &c.issuer).map(|i| (i.bond, i.active)).unwrap_or((0, false));
+            let dispute_open = load_dispute(e, &holder).map(|d| !d.resolved).unwrap_or(false);
+            VerifyResult {
+                verified: !c.revoked,
+                level: c.level,
+                method: c.method,
+                issuer: c.issuer,
+                issuer_bond: bond,
+                issuer_active: active,
+                revoked: c.revoked,
+                dispute_open,
+                issued_at: c.issued_at,
+            }
         }
         // No credential: verified=false, issuer = this contract's address as a placeholder.
         None => VerifyResult {
             verified: false,
             level: 0,
+            method: 0,
             issuer: e.current_contract_address(),
             issuer_bond: 0,
+            issuer_active: false,
             revoked: false,
+            dispute_open: false,
+            issued_at: 0,
         },
     }
 }

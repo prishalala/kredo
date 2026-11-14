@@ -15,8 +15,11 @@ pub struct Issuer {
 pub struct Credential {
     pub holder: Address,
     pub issuer: Address,
-    pub doc_hash: BytesN<32>, // keyed HMAC of document number, computed off-chain
-    pub level: u32,           // 1 = vouched, 2 = ID + org confirmed, 3 = passport chip
+    // PRIVACY: keyed HMAC of the document number, computed off-chain. The prototype uses
+    // SYNTHETIC hashes only. No real document numbers, names, photos or biometrics may ever go on-chain.
+    pub doc_hash: BytesN<32>,
+    pub level: u32,  // 1 = vouched, 2 = ID + org confirmed, 3 = passport chip
+    pub method: u32, // 1 = passport chip + selfie (simulated), 2 = in-person doc check by bonded org, 3 = vouched
     pub revoked: bool,
     pub issued_at: u64,
 }
@@ -26,9 +29,13 @@ pub struct Credential {
 pub struct VerifyResult {
     pub verified: bool, // exists AND not revoked
     pub level: u32,
+    pub method: u32,
     pub issuer: Address,
     pub issuer_bond: i128,
+    pub issuer_active: bool,
     pub revoked: bool,
+    pub dispute_open: bool,
+    pub issued_at: u64,
 }
 
 #[contracttype]
@@ -36,10 +43,27 @@ pub struct VerifyResult {
 pub struct Dispute {
     pub holder: Address,
     pub opened_by: Address,
-    pub votes_fake: u32,
-    pub votes_real: u32,
+    pub votes_negligence: u32,
+    pub votes_deception: u32,
+    pub votes_valid: u32,
     pub voted: Vec<Address>,
     pub resolved: bool,
+    pub outcome: u32, // 0 = still open, 1-3 = an Outcome value, 4 = INCONCLUSIVE (no 2-vote majority)
+    pub slashed: i128, // stroops slashed from the issuer (0 unless IssuerNegligence)
+}
+
+/// Dispute.outcome when every eligible reviewer voted but no outcome got 2 votes.
+/// Nothing changes; the dispute closes so a new one can be opened (escalation path).
+pub const INCONCLUSIVE: u32 = 4;
+
+/// What the panel decides. 2 votes for the same outcome resolve the dispute.
+#[contracttype]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[repr(u32)]
+pub enum Outcome {
+    IssuerNegligence = 1, // issuer was careless -> revoke + slash bond
+    PersonDeception = 2,  // person fooled a careful issuer -> revoke, NO slash
+    Valid = 3,            // credential is fine -> close, no change
 }
 
 /// Settings passed to `initialize` (internal; exposed read-only via get_config).
@@ -78,3 +102,6 @@ pub struct CredRevoked { pub holder: Address, pub issuer: Address, pub slashed_a
 
 #[contractevent(topics = ["dispute", "opened"], data_format = "vec")]
 pub struct DisputeOpened { pub holder: Address, pub opened_by: Address }
+
+#[contractevent(topics = ["dispute", "resolved"], data_format = "vec")]
+pub struct DisputeResolved { pub holder: Address, pub outcome: u32, pub slashed: i128 }
