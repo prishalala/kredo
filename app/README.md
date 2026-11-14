@@ -15,24 +15,25 @@ Open the link it prints (usually http://localhost:5173).
 
 ## Demo mode vs real contract
 
-In `src/config.ts`:
+- **Default:** calls the deployed contract on Stellar Testnet, signed with the [Freighter](https://www.freighter.app) wallet (set to **Testnet**).
+- **Practice mode:** copy `.env.example` to `.env` and set `VITE_USE_MOCK=true`. A simulated contract runs in the browser with the same rules as `CONTRACT.md`. No wallet is needed, and it resets on reload.
 
-- `USE_MOCK = true`: a simulated contract in the browser with the same rules as `CONTRACT.md`. No wallet needed.
-- `USE_MOCK = false`: calls the deployed contract on Stellar Testnet, signed with the [Freighter](https://www.freighter.app) wallet (set to **Testnet**).
+The app follows account switches in Freighter automatically, so you can move between the agency, bank and panel accounts without reconnecting.
 
 ### Real-contract demo accounts (Freighter)
 
 | Step | Account to have connected in Freighter |
 |---|---|
 | Register + issue | Any funded testnet account with 100+ XLM (it becomes the issuer) |
-| Bank check | Any account, or none (read-only, free) |
+| Bank check | None needed (read-only, free) |
 | Open dispute | Any funded account |
 | Vote | One of the 3 panel accounts in `deployments/testnet.json` (import their secret keys into Freighter) |
 
 ## Demo flow
 
+0. Click **Reset demo** first. The contract allows one credential per person, ever, so each run gets fresh addresses for Amara, Daniel and Mei.
 1. **Issuer portal:** lock a 100 XLM bond and register.
-2. Pick Amara, choose a verification method, enter a document number, **Check identity**, **Issue credential**.
+2. Pick Amara, choose a verification method, keep the generated test document number (never a real one), **Check identity**, **Issue credential**.
 3. Pick Daniel and try the **same document number** → duplicate blocked.
 4. **Bank checker:** check Amara → verification receipt, backed by 100 XLM.
 5. **Dispute panel:** open a dispute; two panelists vote **Negligence**.

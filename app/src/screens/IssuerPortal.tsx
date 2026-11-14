@@ -4,7 +4,7 @@ import { docHash, toHex } from "../kredo/hash";
 import type { Issuer } from "../kredo/types";
 import { LEVEL_LABELS, METHODS } from "../kredo/types";
 import { MIN_BOND_XLM, MAX_VOUCHES, SLASH_PERCENT } from "../config";
-import { PEOPLE, personaFor } from "../personas";
+import { PEOPLE, personaFor, testDocNumber } from "../personas";
 import { short } from "../wallet";
 import type { ScreenProps } from "../App";
 import { ArrowIcon, LockIcon } from "../icons";
@@ -15,7 +15,7 @@ export default function IssuerPortal({ me, notify, run, busy, mark, holder, setH
 
   const [method, setMethod] = useState(1);
   const [country, setCountry] = useState("NGA");
-  const [docNumber, setDocNumber] = useState("");
+  const [docNumber, setDocNumber] = useState(testDocNumber);
   const [checkStep, setCheckStep] = useState(-1); // -1 not started, 0–2 running, 3 passed
   const [lastHash, setLastHash] = useState("");
   const [justIssued, setJustIssued] = useState("");
@@ -23,7 +23,12 @@ export default function IssuerPortal({ me, notify, run, busy, mark, holder, setH
   const m = METHODS[method];
   const person = personaFor(holder);
 
-  useEffect(() => { if (me) getIssuer(me).then(setIssuer); }, [me]);
+  useEffect(() => {
+    if (!me) return;
+    getIssuer(me).then(setIssuer).catch((e) => notify(e instanceof Error ? e.message : String(e), "error"));
+    // notify is recreated every render; re-run only when the account changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [me]);
   useEffect(() => { setCheckStep(-1); setJustIssued(""); }, [holder, docNumber, method]);
 
   const refresh = async () => setIssuer(await getIssuer(me));
@@ -136,9 +141,13 @@ export default function IssuerPortal({ me, notify, run, busy, mark, holder, setH
           </div>
           <div className="col">
             <label htmlFor="doc">{m.docLabel}</label>
-            <input id="doc" value={docNumber} disabled={!registered} placeholder="e.g. A12345678" onChange={(e) => setDocNumber(e.target.value)} />
+            <input id="doc" value={docNumber} disabled={!registered} placeholder="e.g. TEST123456" onChange={(e) => setDocNumber(e.target.value)} />
           </div>
         </div>
+        <p className="hint">
+          Prototype: use a made-up number only, never a real document.{" "}
+          <button type="button" className="link mono" disabled={!registered} onClick={() => setDocNumber(testDocNumber())}>New test number</button>
+        </p>
 
         {checkStep >= 0 && (
           <ul className="checks mono" aria-live="polite">

@@ -131,19 +131,23 @@ stellar contract invoke --network testnet --source-account <any-funded-key> --se
 ```
 
 ### App
-_TODO (Person 4): add the install and run commands._
+React + TypeScript (Vite). It reads the contract's interface straight from testnet with the Stellar SDK, so no generated bindings are needed.
 ```bash
-stellar contract bindings typescript --network testnet \
-  --contract-id CBDATTO6MSWR6OIEKNVPR6K53EMRDOZ6J2R52F3EPB3RDZIVMBSNIPG3 --output-dir app/kredo-client
-cd app && npm install && npm run dev
+cd app
+npm install
+npm run dev        # http://localhost:5173
 ```
+By default the app talks to the **real contract on testnet** and signs with Freighter (set to Testnet).
+For practice without a wallet, copy `app/.env.example` to `app/.env` and set `VITE_USE_MOCK=true` (a pretend contract in the browser with the same rules).
+Freighter accounts for a real run: the agency (any account with 100+ XLM), the bank (any funded account), and 2 of the 3 panel accounts from `deployments/testnet.json`. The app follows account switches in Freighter automatically.
 
 ### Demo walkthrough (app)
-1. In **Issuer portal**, connect Freighter as the agency, then **Register** with a 100 XLM bond.
-2. Click **Verify ID** (simulated), then **Issue credential** at level 2 to the holder's address.
-3. Issue the same ID again. The app shows "This ID is already registered".
-4. In **Bank checker**, look up the holder: "Verified ✓, Level 2, backed by 100 XLM".
-5. In **Dispute panel**, the bank opens a dispute, then panelist 1 and panelist 2 vote **Issuer negligence**.
+0. Click **Reset demo** at the start of every run. Each person can hold only one credential ever, so every run needs fresh addresses for Amara, Daniel and Mei.
+1. In **Issuer portal**, connect Freighter as the agency, then **Register** with a 100 XLM bond (skip this if the agency is already registered).
+2. Pick Amara and a method, keep the generated test document number, click **Check identity** (simulated), then **Issue credential**.
+3. Pick Daniel, keep the **same** document number, and issue. It is blocked: "This ID document is already registered".
+4. In **Bank checker**, check Amara (no wallet needed): "Verified ✓, Level 2, backed by 100 XLM".
+5. In **Dispute panel**, switch Freighter to the bank and open a dispute, then switch to panelist 1 and panelist 2 and vote **Negligence**.
 6. In **Bank checker** again: "Revoked ✗", issuer bond is now 50 XLM.
 
 ---

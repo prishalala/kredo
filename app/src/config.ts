@@ -1,8 +1,8 @@
 // ─── Kredo app settings ───────────────────────────────────────────────
-// USE_MOCK = true  → a pretend contract in the browser with the same rules
-//                    (good for practising the demo with no wallet).
-// USE_MOCK = false → the real Kredo contract on Stellar Testnet, signed with Freighter.
-export const USE_MOCK = true;
+// Default: the REAL Kredo contract on Stellar Testnet, signed with Freighter.
+// Practice mode: set VITE_USE_MOCK=true in app/.env to use a pretend contract in the
+// browser with the same rules (no wallet needed, resets on reload).
+export const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
 
 // From deployments/testnet.json in the team repo.
 export const CONTRACT_ID = "CBDATTO6MSWR6OIEKNVPR6K53EMRDOZ6J2R52F3EPB3RDZIVMBSNIPG3";
