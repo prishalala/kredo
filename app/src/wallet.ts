@@ -1,7 +1,6 @@
 // Freighter wallet connection.
 // Install the Freighter browser extension and switch it to Testnet first.
-import { isConnected, requestAccess, signTransaction } from "@stellar/freighter-api";
-import { NETWORK_PASSPHRASE } from "./config";
+import { isConnected, requestAccess, WatchWalletChanges } from "@stellar/freighter-api";
 
 export async function connectWallet(): Promise<string> {
   const conn = await isConnected();
@@ -13,12 +12,15 @@ export async function connectWallet(): Promise<string> {
   return res.address;
 }
 
-// Used on Sunday when calling the real contract: the generated client builds a
-// transaction, Freighter signs it.
-export async function signWithFreighter(xdr: string, address: string): Promise<string> {
-  const res = await signTransaction(xdr, { networkPassphrase: NETWORK_PASSPHRASE, address });
-  if (res.error) throw new Error(res.error.message ?? "Signing was declined.");
-  return res.signedTxXdr;
+// The demo switches between several Freighter accounts (agency, bank, panelists).
+// This tells the app when the user picks a different account, so it signs as the right one.
+// Returns a function that stops watching.
+export function watchAccount(onChange: (address: string) => void): () => void {
+  const watcher = new WatchWalletChanges(1000);
+  watcher.watch(({ address, error }) => {
+    if (!error && address) onChange(address);
+  });
+  return () => watcher.stop();
 }
 
 export const short = (addr: string) => (addr ? `${addr.slice(0, 5)}…${addr.slice(-4)}` : "");

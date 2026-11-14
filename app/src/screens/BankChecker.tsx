@@ -23,7 +23,7 @@ export default function BankChecker({ run, busy, mark, notify, holder, setHolder
       if (res.verified) { mark("verify"); notify("Credential verified"); }
       else if (res.revoked) { mark("revoke"); notify("This credential has been revoked", "info"); }
       else notify("No Kredo credential found", "info");
-    }, "Reading credential from Stellar…");
+    }, "Reading credential from Stellar…", false); // read-only: no wallet needed
 
   const status = !r ? null : r.verified ? (r.disputeOpen ? "review" : "ok") : r.revoked ? "revoked" : "none";
 
@@ -90,7 +90,7 @@ export default function BankChecker({ run, busy, mark, notify, holder, setHolder
                 <span className="small">A bonded panel revoked it after a dispute.</span>
               </div>
             )}
-            {r.verified && (
+            {r.verified && !r.disputeOpen && (
               <button className="link mono" onClick={() => go("dispute")}>Something looks wrong? Open a dispute <ArrowIcon /></button>
             )}
           </>

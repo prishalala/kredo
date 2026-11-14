@@ -1,12 +1,12 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Home from "./screens/Home";
 import IssuerPortal from "./screens/IssuerPortal";
 import BankChecker from "./screens/BankChecker";
 import DisputePanel from "./screens/DisputePanel";
-import { connectWallet, short } from "./wallet";
+import { connectWallet, short, watchAccount } from "./wallet";
 import { CONTRACT_ID, EXPLORER, USE_MOCK } from "./config";
 import { KredoError } from "./kredo/types";
-import { PEOPLE } from "./personas";
+import { PEOPLE, newDemoPeople } from "./personas";
 import { KredoMark } from "./icons";
 
 // Used as the organization before a wallet is connected (demo mode only).
@@ -32,7 +32,8 @@ export interface ScreenProps {
   me: string;
   wallet: string;
   notify: (msg: string, kind?: ToastKind) => void;
-  run: (fn: () => Promise<void>, busyLabel?: string) => Promise<void>;
+  // needsWallet = false for free read-only calls (e.g. the bank check).
+  run: (fn: () => Promise<void>, busyLabel?: string, needsWallet?: boolean) => Promise<void>;
   busy: boolean;
   mark: (step: StepKey) => void;
   done: Record<StepKey, boolean>;
@@ -72,8 +73,20 @@ export default function App() {
   };
   const mark = (step: StepKey) => setDone((d) => ({ ...d, [step]: true }));
 
-  const run = async (fn: () => Promise<void>, label = "Sending to Stellar…") => {
-    if (!me) { notify("Connect your Freighter wallet first.", "error"); return; }
+  // Follow account switches in Freighter (agency → bank → panelist) without reconnecting.
+  const connected = wallet !== "";
+  useEffect(() => {
+    if (!connected || USE_MOCK) return;
+    return watchAccount((address) => {
+      setWallet((current) => {
+        if (current && current !== address) notify(`Switched to ${short(address)}`, "info");
+        return address;
+      });
+    });
+  }, [connected]);
+
+  const run = async (fn: () => Promise<void>, label = "Sending to Stellar…", needsWallet = true) => {
+    if (needsWallet && !me) { notify("Connect your Freighter wallet first.", "error"); return; }
     setBusyLabel(label);
     try {
       await fn();
@@ -99,6 +112,14 @@ export default function App() {
   };
 
   const go = (t: Tab) => { setTab(t); window.scrollTo({ top: 0 }); };
+
+  // Each run needs new holder addresses: the contract allows one credential per person, forever.
+  const resetDemo = () => {
+    const people = newDemoPeople();
+    setDone(NO_STEPS);
+    setHolder(people[0].address);
+    notify("New demo run: fresh addresses for Amara, Daniel and Mei", "info");
+  };
   const props: ScreenProps = { me, wallet, notify, run, busy, mark, done, holder, setHolder, go };
   const page = tab !== "home" ? PAGE[tab] : null;
 
@@ -143,9 +164,7 @@ export default function App() {
                 </li>
               ))}
             </ol>
-            {Object.values(done).some(Boolean) && (
-              <button className="link mono" onClick={() => setDone(NO_STEPS)}>Reset</button>
-            )}
+            <button className="link mono" onClick={resetDemo} title="Start a new run with fresh demo people">Reset demo</button>
           </div>
 
           {tab === "issuer" && <IssuerPortal {...props} />}

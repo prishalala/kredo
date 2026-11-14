@@ -19,7 +19,10 @@ export default function DisputePanel({ me, wallet, notify, run, busy, mark, hold
   const person = personaFor(holder);
   const myPanelIndex = PANEL.indexOf(wallet);
 
-  useEffect(() => { getDispute(holder).then(setD); }, [holder]);
+  useEffect(() => {
+    getDispute(holder).then(setD).catch((e) => notify(e instanceof Error ? e.message : String(e), "error"));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holder]);
 
   const onOpen = () =>
     run(async () => {

@@ -104,7 +104,7 @@ export async function getIssuer(org: string): Promise<Issuer | null> {
   try {
     const i = unwrap<RawIssuer>((await (await client()).get_issuer({ org })).result);
     return i ? { org: i.org, bond: stroopsToXlm(i.bond), activeVouches: Number(i.active_vouches), active: i.active } : null;
-  } catch { return null; }
+  } catch (e) { friendly(e); } // network/RPC failure: show it instead of pretending "not registered"
 }
 
 export async function openDispute(caller: string, holder: string) {
@@ -123,7 +123,7 @@ export async function getDispute(holder: string): Promise<Dispute | null> {
       votesDeception: Number(d.votes_deception), votesValid: Number(d.votes_valid), voted: [...d.voted],
       resolved: d.resolved, outcome: Number(d.outcome), slashed: stroopsToXlm(d.slashed),
     } : null;
-  } catch { return null; }
+  } catch (e) { friendly(e); } // network/RPC failure: show it instead of pretending "no dispute"
 }
 
 export async function releaseBond(org: string) {
