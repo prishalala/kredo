@@ -2,9 +2,9 @@
 #![cfg(test)]
 extern crate std;
 
-use crate::{Error, Kredo, KredoClient};
+use crate::{Error, Kredo, KredoClient, Outcome, INCONCLUSIVE};
 use soroban_sdk::{
-    testutils::{Address as _, Events as _},
+    testutils::{Address as _, Events as _, Ledger as _},
     token::{StellarAssetClient, TokenClient},
     vec, Address, BytesN, Env,
 };
@@ -49,7 +49,7 @@ fn issued<'a>() -> (T<'a>, Address) {
     let t = setup(5);
     t.c.register_issuer(&t.org, &MIN_BOND);
     let holder = Address::generate(&t.e);
-    t.c.issue_credential(&t.org, &holder, &h(&t.e, 1), &2);
+    t.c.issue_credential(&t.org, &holder, &h(&t.e, 1), &2, &2);
     (t, holder)
 }
 
@@ -112,20 +112,20 @@ fn verify_unknown_holder_is_not_verified() {
 fn duplicate_doc_hash_rejected() {
     let (t, _) = issued();
     let other = Address::generate(&t.e);
-    assert_eq!(t.c.try_issue_credential(&t.org, &other, &h(&t.e, 1), &2), Err(Ok(Error::DuplicateId)));
+    assert_eq!(t.c.try_issue_credential(&t.org, &other, &h(&t.e, 1), &2, &2), Err(Ok(Error::DuplicateId)));
 }
 
 #[test]
 fn holder_cannot_get_second_credential() {
     let (t, holder) = issued();
-    assert_eq!(t.c.try_issue_credential(&t.org, &holder, &h(&t.e, 2), &2), Err(Ok(Error::AlreadyHasCredential)));
+    assert_eq!(t.c.try_issue_credential(&t.org, &holder, &h(&t.e, 2), &2, &2), Err(Ok(Error::AlreadyHasCredential)));
 }
 
 #[test]
 fn unregistered_issuer_rejected() {
     let t = setup(5);
     let rogue = Address::generate(&t.e);
-    assert_eq!(t.c.try_issue_credential(&rogue, &t.bank, &h(&t.e, 1), &2), Err(Ok(Error::NotIssuer)));
+    assert_eq!(t.c.try_issue_credential(&rogue, &t.bank, &h(&t.e, 1), &2, &2), Err(Ok(Error::NotIssuer)));
 }
 
 #[test]
@@ -134,7 +134,7 @@ fn issue_without_issuer_signature_fails() {
     let t = setup(5);
     t.c.register_issuer(&t.org, &MIN_BOND);
     t.e.set_auths(&[]); // stop mocking: no signature from org
-    t.c.issue_credential(&t.org, &t.bank, &h(&t.e, 1), &2);
+    t.c.issue_credential(&t.org, &t.bank, &h(&t.e, 1), &2, &2);
 }
 
 #[test]
@@ -142,8 +142,8 @@ fn bad_level_rejected() {
     let t = setup(5);
     t.c.register_issuer(&t.org, &MIN_BOND);
     let x = Address::generate(&t.e);
-    assert_eq!(t.c.try_issue_credential(&t.org, &x, &h(&t.e, 1), &0), Err(Ok(Error::BadLevel)));
-    assert_eq!(t.c.try_issue_credential(&t.org, &x, &h(&t.e, 1), &4), Err(Ok(Error::BadLevel)));
+    assert_eq!(t.c.try_issue_credential(&t.org, &x, &h(&t.e, 1), &0, &2), Err(Ok(Error::BadLevel)));
+    assert_eq!(t.c.try_issue_credential(&t.org, &x, &h(&t.e, 1), &4, &2), Err(Ok(Error::BadLevel)));
 }
 
 #[test]
@@ -151,12 +151,24 @@ fn vouch_cap_enforced() {
     let t = setup(2);
     t.c.register_issuer(&t.org, &MIN_BOND);
     for n in 1..=2u8 {
-        t.c.issue_credential(&t.org, &Address::generate(&t.e), &h(&t.e, n), &1);
+        t.c.issue_credential(&t.org, &Address::generate(&t.e), &h(&t.e, n), &1, &2);
     }
     assert_eq!(
-        t.c.try_issue_credential(&t.org, &Address::generate(&t.e), &h(&t.e, 3), &1),
+        t.c.try_issue_credential(&t.org, &Address::generate(&t.e), &h(&t.e, 3), &1, &2),
         Err(Ok(Error::VouchLimitReached))
     );
+}
+
+#[test]
+fn bad_method_rejected_and_method_returned() {
+    let t = setup(5);
+    t.c.register_issuer(&t.org, &MIN_BOND);
+    let x = Address::generate(&t.e);
+    assert_eq!(t.c.try_issue_credential(&t.org, &x, &h(&t.e, 1), &2, &0), Err(Ok(Error::BadMethod)));
+    assert_eq!(t.c.try_issue_credential(&t.org, &x, &h(&t.e, 1), &2, &4), Err(Ok(Error::BadMethod)));
+    t.c.issue_credential(&t.org, &x, &h(&t.e, 1), &3, &1);
+    let v = t.c.verify(&x);
+    assert_eq!((v.level, v.method), (3, 1));
 }
 
 // ---------- disputes ----------
@@ -172,12 +184,12 @@ fn dispute_open_rules() {
 }
 
 #[test]
-fn two_fake_votes_revoke_and_slash() {
+fn negligence_revokes_and_slashes() {
     let (t, holder) = issued();
     t.c.open_dispute(&t.bank, &holder);
-    t.c.vote(&t.p[0], &holder, &true);
+    t.c.vote(&t.p[0], &holder, &Outcome::IssuerNegligence);
     assert!(t.c.verify(&holder).verified); // 1 vote isn't enough
-    t.c.vote(&t.p[1], &holder, &true);
+    t.c.vote(&t.p[1], &holder, &Outcome::IssuerNegligence);
 
     let v = t.c.verify(&holder);
     assert!(!v.verified && v.revoked);
@@ -185,20 +197,21 @@ fn two_fake_votes_revoke_and_slash() {
     assert_eq!(t.xlm.balance(&t.admin), 50 * XLM); // slashed XLM really moved
     assert_eq!(t.xlm.balance(&t.c.address), 50 * XLM);
     assert_eq!(t.c.get_issuer(&t.org).active_vouches, 0);
-    assert!(t.c.get_dispute(&holder).resolved);
+    let d = t.c.get_dispute(&holder);
+    assert!(d.resolved && d.outcome == Outcome::IssuerNegligence as u32 && d.slashed == 50 * XLM);
     // resolved: no more votes, can't re-dispute a revoked credential
-    assert_eq!(t.c.try_vote(&t.p[2], &holder, &true), Err(Ok(Error::NotFound)));
+    assert_eq!(t.c.try_vote(&t.p[2], &holder, &Outcome::IssuerNegligence), Err(Ok(Error::NotFound)));
     assert_eq!(t.c.try_open_dispute(&t.bank, &holder), Err(Ok(Error::NotFound)));
 }
 
 #[test]
-fn two_real_votes_no_penalty() {
+fn valid_votes_no_penalty() {
     // Real person (incl. holder misuse) never slashes the issuer.
     let (t, holder) = issued();
     t.c.open_dispute(&t.bank, &holder);
-    t.c.vote(&t.p[0], &holder, &false);
-    t.c.vote(&t.p[1], &holder, &true);
-    t.c.vote(&t.p[2], &holder, &false);
+    t.c.vote(&t.p[0], &holder, &Outcome::Valid);
+    t.c.vote(&t.p[1], &holder, &Outcome::IssuerNegligence);
+    t.c.vote(&t.p[2], &holder, &Outcome::Valid);
     assert!(t.c.verify(&holder).verified);
     assert_eq!(t.c.get_issuer(&t.org).bond, MIN_BOND);
     assert_eq!(t.xlm.balance(&t.admin), 0);
@@ -210,22 +223,66 @@ fn two_real_votes_no_penalty() {
 fn double_vote_and_non_panelist_rejected() {
     let (t, holder) = issued();
     t.c.open_dispute(&t.bank, &holder);
-    t.c.vote(&t.p[0], &holder, &true);
-    assert_eq!(t.c.try_vote(&t.p[0], &holder, &true), Err(Ok(Error::AlreadyVoted)));
-    assert_eq!(t.c.try_vote(&t.bank, &holder, &true), Err(Ok(Error::NotPanelist)));
+    t.c.vote(&t.p[0], &holder, &Outcome::IssuerNegligence);
+    assert_eq!(t.c.try_vote(&t.p[0], &holder, &Outcome::IssuerNegligence), Err(Ok(Error::AlreadyVoted)));
+    assert_eq!(t.c.try_vote(&t.bank, &holder, &Outcome::IssuerNegligence), Err(Ok(Error::NotPanelist)));
 }
 
 #[test]
-fn issuer_and_opener_cannot_vote() {
+fn issuer_cannot_vote() {
+    // Conflict of interest: a panelist who issued the credential can't judge it.
     let t = setup(5);
-    let panel_org = t.p[0].clone(); // a panelist who is also an issuer
+    let panel_org = t.p[0].clone();
     fund(&t, &panel_org, MIN_BOND);
     t.c.register_issuer(&panel_org, &MIN_BOND);
     let holder = Address::generate(&t.e);
-    t.c.issue_credential(&panel_org, &holder, &h(&t.e, 1), &2);
-    t.c.open_dispute(&t.p[1], &holder);
-    assert_eq!(t.c.try_vote(&panel_org, &holder, &true), Err(Ok(Error::ConflictOfInterest)));
-    assert_eq!(t.c.try_vote(&t.p[1], &holder, &true), Err(Ok(Error::ConflictOfInterest)));
+    t.c.issue_credential(&panel_org, &holder, &h(&t.e, 1), &2, &2);
+    t.c.open_dispute(&t.bank, &holder); // p1 + p2 still eligible
+    assert_eq!(t.c.try_vote(&panel_org, &holder, &Outcome::IssuerNegligence), Err(Ok(Error::ConflictOfInterest)));
+    assert_eq!(t.c.get_dispute(&holder).voted.len(), 0);
+}
+
+#[test]
+fn opener_cannot_vote() {
+    let (t, holder) = issued();
+    t.c.open_dispute(&t.p[1], &holder); // p0 + p2 still eligible
+    assert_eq!(t.c.try_vote(&t.p[1], &holder, &Outcome::IssuerNegligence), Err(Ok(Error::ConflictOfInterest)));
+}
+
+#[test]
+fn dispute_rejected_without_two_independent_reviewers() {
+    // Issuer = p0 and opener = p1 leaves only p2: 2-of-3 is unreachable, so the dispute is refused.
+    let t = setup(5);
+    let panel_org = t.p[0].clone();
+    fund(&t, &panel_org, MIN_BOND);
+    t.c.register_issuer(&panel_org, &MIN_BOND);
+    let holder = Address::generate(&t.e);
+    t.c.issue_credential(&panel_org, &holder, &h(&t.e, 1), &2, &2);
+    assert_eq!(t.c.try_open_dispute(&t.p[1], &holder), Err(Ok(Error::NotEnoughReviewers)));
+    assert_eq!(t.c.try_get_dispute(&holder), Err(Ok(Error::NotFound)));
+    let v = t.c.verify(&holder);
+    assert!(v.verified && !v.dispute_open); // nothing auto-resolved
+    // A non-panel opener (e.g. the bank) still can: p1 + p2 are eligible.
+    t.c.open_dispute(&t.bank, &holder);
+}
+
+#[test]
+fn two_reviewer_split_is_inconclusive() {
+    // Only 2 eligible reviewers and they disagree (1-1): inconclusive, never auto-Valid.
+    let t = setup(5);
+    let panel_org = t.p[0].clone();
+    fund(&t, &panel_org, MIN_BOND);
+    t.c.register_issuer(&panel_org, &MIN_BOND);
+    let holder = Address::generate(&t.e);
+    t.c.issue_credential(&panel_org, &holder, &h(&t.e, 1), &2, &2);
+    t.c.open_dispute(&t.bank, &holder);
+    t.c.vote(&t.p[1], &holder, &Outcome::IssuerNegligence);
+    assert!(!t.c.get_dispute(&holder).resolved);
+    t.c.vote(&t.p[2], &holder, &Outcome::Valid);
+    let d = t.c.get_dispute(&holder);
+    assert!(d.resolved && d.outcome == INCONCLUSIVE && d.slashed == 0);
+    assert!(t.c.verify(&holder).verified);
+    assert_eq!(t.c.get_issuer(&panel_org).bond, MIN_BOND);
 }
 
 // ---------- release_bond ----------
@@ -240,8 +297,8 @@ fn release_blocked_while_backing() {
 fn release_returns_remaining_bond() {
     let (t, holder) = issued();
     t.c.open_dispute(&t.bank, &holder);
-    t.c.vote(&t.p[0], &holder, &true);
-    t.c.vote(&t.p[1], &holder, &true); // slashed to 50, vouches -> 0
+    t.c.vote(&t.p[0], &holder, &Outcome::IssuerNegligence);
+    t.c.vote(&t.p[1], &holder, &Outcome::IssuerNegligence); // slashed to 50, vouches -> 0
     let before = t.xlm.balance(&t.org);
     t.c.release_bond(&t.org);
     assert_eq!(t.xlm.balance(&t.org), before + 50 * XLM);
@@ -249,5 +306,82 @@ fn release_returns_remaining_bond() {
     let i = t.c.get_issuer(&t.org);
     assert!(!i.active && i.bond == 0);
     assert_eq!(t.c.try_release_bond(&t.org), Err(Ok(Error::NotIssuer)));
-    assert_eq!(t.c.try_issue_credential(&t.org, &t.bank, &h(&t.e, 7), &1), Err(Ok(Error::NotIssuer)));
+    assert_eq!(t.c.try_issue_credential(&t.org, &t.bank, &h(&t.e, 7), &1, &2), Err(Ok(Error::NotIssuer)));
+}
+
+// ---------- fair penalties ----------
+
+#[test]
+fn deception_revokes_without_slashing() {
+    // Person fooled a careful issuer: credential revoked, issuer keeps its whole bond.
+    let (t, holder) = issued();
+    t.c.open_dispute(&t.bank, &holder);
+    t.c.vote(&t.p[0], &holder, &Outcome::PersonDeception);
+    t.c.vote(&t.p[1], &holder, &Outcome::PersonDeception);
+
+    let v = t.c.verify(&holder);
+    assert!(!v.verified && v.revoked && !v.dispute_open);
+    assert_eq!(v.issuer_bond, MIN_BOND);
+    assert_eq!(t.xlm.balance(&t.admin), 0); // nothing slashed
+    assert_eq!(t.xlm.balance(&t.c.address), MIN_BOND);
+    assert_eq!(t.c.get_issuer(&t.org).active_vouches, 0); // slot freed
+    let d = t.c.get_dispute(&holder);
+    assert!(d.resolved && d.outcome == Outcome::PersonDeception as u32 && d.slashed == 0);
+    assert_eq!(d.votes_deception, 2);
+    // The deceiving ID stays blocked.
+    assert_eq!(t.c.try_issue_credential(&t.org, &Address::generate(&t.e), &h(&t.e, 1), &2, &2), Err(Ok(Error::DuplicateId)));
+}
+
+#[test]
+fn three_way_split_is_inconclusive() {
+    // 1-1-1: no outcome reached 2 votes -> INCONCLUSIVE. No revoke, no slash, not Valid.
+    let (t, holder) = issued();
+    t.c.open_dispute(&t.bank, &holder);
+    t.c.vote(&t.p[0], &holder, &Outcome::IssuerNegligence);
+    t.c.vote(&t.p[1], &holder, &Outcome::PersonDeception);
+    assert!(!t.c.get_dispute(&holder).resolved);
+    t.c.vote(&t.p[2], &holder, &Outcome::Valid);
+
+    let d = t.c.get_dispute(&holder);
+    assert!(d.resolved && d.outcome == INCONCLUSIVE && d.slashed == 0);
+    assert_ne!(d.outcome, Outcome::Valid as u32);
+    let v = t.c.verify(&holder);
+    assert!(v.verified && !v.revoked && !v.dispute_open);
+    assert_eq!(v.issuer_bond, MIN_BOND);
+    assert_eq!(t.xlm.balance(&t.admin), 0);
+    assert_eq!(t.c.get_issuer(&t.org).active_vouches, 1);
+    // Not locked: no more votes on this one, but a new dispute can be opened (escalation path).
+    assert_eq!(t.c.try_vote(&t.p[0], &holder, &Outcome::Valid), Err(Ok(Error::NotFound)));
+    t.c.open_dispute(&t.bank, &holder);
+    t.c.vote(&t.p[0], &holder, &Outcome::IssuerNegligence);
+    t.c.vote(&t.p[1], &holder, &Outcome::IssuerNegligence);
+    assert!(t.c.verify(&holder).revoked);
+}
+
+#[test]
+fn full_happy_path_receipt() {
+    // Register -> issue -> duplicate blocked -> verify receipt -> dispute -> negligence -> revoked + slashed.
+    let t = setup(5);
+    t.c.register_issuer(&t.org, &MIN_BOND);
+    t.e.ledger().set_timestamp(1_763_150_400);
+    let holder = Address::generate(&t.e);
+    t.c.issue_credential(&t.org, &holder, &h(&t.e, 9), &2, &2);
+    assert_eq!(
+        t.c.try_issue_credential(&t.org, &Address::generate(&t.e), &h(&t.e, 9), &2, &2),
+        Err(Ok(Error::DuplicateId))
+    );
+
+    let v = t.c.verify(&holder);
+    assert!(v.verified && !v.revoked && v.issuer_active && !v.dispute_open);
+    assert_eq!((v.level, v.method, v.issuer.clone(), v.issuer_bond, v.issued_at), (2, 2, t.org.clone(), MIN_BOND, 1_763_150_400));
+
+    t.c.open_dispute(&t.bank, &holder);
+    assert!(t.c.verify(&holder).dispute_open);
+    t.c.vote(&t.p[0], &holder, &Outcome::IssuerNegligence);
+    t.c.vote(&t.p[1], &holder, &Outcome::IssuerNegligence);
+
+    let v = t.c.verify(&holder);
+    assert!(!v.verified && v.revoked && !v.dispute_open && v.issuer_active);
+    assert_eq!(v.issuer_bond, 50 * XLM);
+    assert_eq!(t.c.get_issuer(&t.org).bond, 50 * XLM);
 }

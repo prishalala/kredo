@@ -38,8 +38,9 @@ impl Kredo {
         issuer::register_issuer(&e, org, bond)
     }
 
-    pub fn issue_credential(e: Env, issuer: Address, holder: Address, doc_hash: BytesN<32>, level: u32) -> Result<(), Error> {
-        issuer::issue_credential(&e, issuer, holder, doc_hash, level)
+    /// `doc_hash` must be a keyed hash (synthetic in the prototype) — never a real document number.
+    pub fn issue_credential(e: Env, issuer: Address, holder: Address, doc_hash: BytesN<32>, level: u32, method: u32) -> Result<(), Error> {
+        issuer::issue_credential(&e, issuer, holder, doc_hash, level, method)
     }
 
     pub fn verify(e: Env, holder: Address) -> VerifyResult {
@@ -59,8 +60,8 @@ impl Kredo {
         disputes::open_dispute(&e, caller, holder)
     }
 
-    pub fn vote(e: Env, panelist: Address, holder: Address, is_fake: bool) -> Result<(), Error> {
-        disputes::vote(&e, panelist, holder, is_fake)
+    pub fn vote(e: Env, panelist: Address, holder: Address, outcome: Outcome) -> Result<(), Error> {
+        disputes::vote(&e, panelist, holder, outcome)
     }
 
     pub fn release_bond(e: Env, org: Address) -> Result<(), Error> {

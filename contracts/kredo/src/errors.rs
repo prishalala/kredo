@@ -1,4 +1,4 @@
-//! Error codes — 1..13 are from CONTRACT.md; 14..15 are additions (flagged to app pair).
+//! Error codes — must match CONTRACT.md (16 = BadMethod, 17 = NotEnoughReviewers).
 use soroban_sdk::contracterror;
 
 #[contracterror]
@@ -20,4 +20,6 @@ pub enum Error {
     StillBacking = 13,
     AlreadyInitialized = 14,
     BadConfig = 15,
+    BadMethod = 16,
+    NotEnoughReviewers = 17,
 }

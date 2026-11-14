@@ -12,7 +12,9 @@ Built for the **UW Velocity × Stellar Blockchain Innovation Challenge 2026** (P
 
 | | |
 |---|---|
-| **Kredo contract** | [`CAX4DIVMIOS4XXPG3HBVUVKSEHJLEETO52L4ZD7S4Z5NGCO2PL64GONI`](https://stellar.expert/explorer/testnet/contract/CAX4DIVMIOS4XXPG3HBVUVKSEHJLEETO52L4ZD7S4Z5NGCO2PL64GONI) |
+| **Kredo contract** | [`CBDATTO6MSWR6OIEKNVPR6K53EMRDOZ6J2R52F3EPB3RDZIVMBSNIPG3`](https://stellar.expert/explorer/testnet/contract/CBDATTO6MSWR6OIEKNVPR6K53EMRDOZ6J2R52F3EPB3RDZIVMBSNIPG3) |
+| **Previous contract (v2, before the dispute fixes)** | `CBRP3IODWPCHB5T7Q4EUOJTZXN7S2GN4IZN4FJASMKR4N6EYTB6IAZN4` |
+| **Previous contract (v1, `is_fake` voting)** | `CAX4DIVMIOS4XXPG3HBVUVKSEHJLEETO52L4ZD7S4Z5NGCO2PL64GONI` |
 | **Bond token (native XLM SAC)** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 | **Network** | Testnet · RPC `https://soroban-testnet.stellar.org` |
 | **Live app** | _TODO (Person 4): add the URL_ |
@@ -22,15 +24,17 @@ Every address and setting is in [`deployments/testnet.json`](deployments/testnet
 
 ### End-to-end demo, already run on testnet
 
+Run with `scripts\demo.ps1` on the current contract (`CBDATTO6…`). The doc hash is synthetic (random bytes).
+
 | # | Step | Transaction |
 |---|---|---|
-| 1 | Agency registers and locks a 100 XLM bond (real transfer) | [8e218dd…](https://stellar.expert/explorer/testnet/tx/8e218ddf2a8ee4bb6cfe14ed1bb2d00ccacc680e53543802cc3b101917dac6c4) |
-| 2 | Simulated ID check, then a level-2 credential is issued | [d2c6a2b…](https://stellar.expert/explorer/testnet/tx/d2c6a2b1e9682a111a46f4f8cd83e4a277664da287e4ba9c80a29120fe4d0d5c) |
-| 3 | Bank verifies: `verified: true, level 2, bond 100 XLM` | read-only (free) |
+| 1 | Agency registers and locks a 100 XLM bond (real transfer) | [fe5f9a8…](https://stellar.expert/explorer/testnet/tx/fe5f9a8be1fe6c26d1c53ebffda0ab805b4b448ffbee38c61ba71581797d7c4f) |
+| 2 | Simulated ID check, then a level-2 credential is issued (method 2 = in-person document check) | [bc667eb…](https://stellar.expert/explorer/testnet/tx/bc667ebab7d70ad27794a4c8641f7d2f03137a660619aa3b9690d5b7680df0a7) |
+| 3 | Bank verifies (receipt): `verified: true, level 2, method 2, bond 100 XLM, issuer active, no open dispute` | read-only (free) |
 | 4 | The same ID is issued again and **rejected** with `DuplicateId (#5)` | rejected in simulation |
-| 5 | Bank opens a dispute | [e1e3016…](https://stellar.expert/explorer/testnet/tx/e1e3016bb22141387f78f11f4a2104d2c7aff6dcaec18a8e5c11235effd5a95c) |
-| 6 | Panelist 1 votes "fake" | [cc32726…](https://stellar.expert/explorer/testnet/tx/cc3272675886e5978d3a58d2dbc0d462851c2a802761103acf0d3a4802ff4956) |
-| 7 | Panelist 2 votes "fake", so the credential is **revoked** and **50 XLM is slashed** | [309a323…](https://stellar.expert/explorer/testnet/tx/309a32322e06efca03220b33ea06050a454a282075f4ba4d9d99663b04e11e94) |
+| 5 | Bank opens a dispute | [504cc7e…](https://stellar.expert/explorer/testnet/tx/504cc7e359425afb5443d485037dd26d0fca809773882d2ca07041e2ec73fc84) |
+| 6 | Panelist 1 votes `IssuerNegligence` | [a5f3c4a…](https://stellar.expert/explorer/testnet/tx/a5f3c4ac9afc5e48037242dd17d4076a1c732914267459ac94b51f1b62984e1e) |
+| 7 | Panelist 2 votes `IssuerNegligence`, so the credential is **revoked** and **50 XLM is slashed** (`outcome: 1, slashed: 50 XLM`) | [f3e6243…](https://stellar.expert/explorer/testnet/tx/f3e6243510f1674ae46e0a5f2a2283d98c37f68bb04d5eb691ada9dcec4412ff) |
 | 8 | Bank verifies again: `verified: false, revoked: true`, issuer bond 50 XLM | read-only |
 
 ---
@@ -77,10 +81,10 @@ The contract is written in Rust with `soroban-sdk 29`. The full interface is in 
 |---|---|---|
 | `initialize(admin, token, panel, min_bond, max_vouches, slash_percent)` | admin | One-time setup with 3 distinct panelists |
 | `register_issuer(org, bond)` | org | Moves `bond` XLM from org to the contract (must be ≥ `min_bond`) |
-| `issue_credential(issuer, holder, doc_hash, level)` | issuer | Checks that the issuer is active, under its vouching cap, the doc_hash is unused, the holder has no credential yet, and the level is 1–3 |
-| `verify(holder)` → `VerifyResult` | — | Read-only: verified, level, issuer, issuer bond, revoked |
-| `open_dispute(caller, holder)` | caller | Opens a dispute against a non-revoked credential (one open dispute per holder) |
-| `vote(panelist, holder, is_fake)` | panelist | 2 of 3 "fake" votes revoke the credential and slash the bond; 2 "real" votes close the dispute with no penalty |
+| `issue_credential(issuer, holder, doc_hash, level, method)` | issuer | Checks that the issuer is active, under its vouching cap, the doc_hash is unused, the holder has no credential yet, and level and method are 1–3 (method: 1 = chip + selfie (simulated), 2 = in-person document check, 3 = vouched) |
+| `verify(holder)` → `VerifyResult` | — | Read-only Verification Receipt: verified, level, method, issuer, issuer bond, issuer active, revoked, dispute open, issued at |
+| `open_dispute(caller, holder)` | caller | Opens a dispute against a non-revoked credential (one open dispute per holder). Rejected if fewer than 2 independent panelists could vote |
+| `vote(panelist, holder, outcome)` | panelist | 2 votes for the same outcome decide: `1 IssuerNegligence` revokes + slashes the bond, `2 PersonDeception` revokes with no slash, `3 Valid` closes with no change. No majority (e.g. 1-1-1) = **Inconclusive**: no penalty, can be re-disputed |
 | `release_bond(org)` | org | Returns the remaining bond once the org backs no active credentials |
 | `get_issuer` / `get_dispute` / `get_config` | — | Read-only |
 
@@ -90,11 +94,11 @@ The contract is written in Rust with `soroban-sdk 29`. The full interface is in 
 - A document hash can only be used once, and each holder can hold only one credential.
 - Each organization has a vouching cap (`max_vouches`).
 - A panelist can't vote on a credential they issued, can't vote on a dispute they opened, and can only vote once.
-- Holder misuse (a "real" verdict) never penalizes the issuer. Only a "fake" verdict (issuer negligence) slashes the bond.
+- Fair penalties: only an `IssuerNegligence` verdict slashes the bond. If a person deceived a careful issuer (`PersonDeception`), the credential is revoked but the issuer keeps its bond.
 - A revoked credential fails every later `verify`.
 - An issuer can't withdraw its bond while it still backs active credentials.
 
-**Tests:** 18 unit tests in `contracts/kredo/src/test.rs`. They cover verification, duplicates, unauthorized and unsigned issuance, invalid levels, the vouching cap, dispute rules, double voting, conflicts of interest, revocation, slashing (checked against real token balances) and bond release.
+**Tests:** 25 unit tests in `contracts/kredo/src/test.rs`. They cover the full happy path (with the Verification Receipt fields), duplicates, unauthorized and unsigned issuance, invalid levels and methods, the vouching cap, dispute rules, double voting, conflicts of interest, negligence (revoke + slash, checked against real token balances), deception (revoke, no slash), split votes (Inconclusive), disputes without enough independent reviewers, and bond release.
 
 ---
 
@@ -108,7 +112,7 @@ The contract is written in Rust with `soroban-sdk 29`. The full interface is in 
 
 ### Contract
 ```bash
-cargo test                 # 18 tests
+cargo test                 # 25 tests
 stellar contract build     # → target/wasm32v1-none/release/kredo.wasm
 ```
 
@@ -122,7 +126,7 @@ Settings: `min_bond` = 100 XLM (`1_000_000_000` stroops), `max_vouches` = 5, `sl
 Try a read-only call against the live contract:
 ```bash
 stellar contract invoke --network testnet --source-account <any-funded-key> --send no \
-  --contract-id CAX4DIVMIOS4XXPG3HBVUVKSEHJLEETO52L4ZD7S4Z5NGCO2PL64GONI \
+  --contract-id CBDATTO6MSWR6OIEKNVPR6K53EMRDOZ6J2R52F3EPB3RDZIVMBSNIPG3 \
   -- verify --holder GCOWMXHIHNN3Z4EGX36RTFWA7LAUVVB6JK7I2KFNTGKBORNV2JJ3EYEF
 ```
 
@@ -130,7 +134,7 @@ stellar contract invoke --network testnet --source-account <any-funded-key> --se
 _TODO (Person 4): add the install and run commands._
 ```bash
 stellar contract bindings typescript --network testnet \
-  --contract-id CAX4DIVMIOS4XXPG3HBVUVKSEHJLEETO52L4ZD7S4Z5NGCO2PL64GONI --output-dir app/kredo-client
+  --contract-id CBDATTO6MSWR6OIEKNVPR6K53EMRDOZ6J2R52F3EPB3RDZIVMBSNIPG3 --output-dir app/kredo-client
 cd app && npm install && npm run dev
 ```
 
@@ -139,7 +143,7 @@ cd app && npm install && npm run dev
 2. Click **Verify ID** (simulated), then **Issue credential** at level 2 to the holder's address.
 3. Issue the same ID again. The app shows "This ID is already registered".
 4. In **Bank checker**, look up the holder: "Verified ✓, Level 2, backed by 100 XLM".
-5. In **Dispute panel**, the bank opens a dispute, then panelist 1 and panelist 2 vote **Fake**.
+5. In **Dispute panel**, the bank opens a dispute, then panelist 1 and panelist 2 vote **Issuer negligence**.
 6. In **Bank checker** again: "Revoked ✗", issuer bond is now 50 XLM.
 
 ---
