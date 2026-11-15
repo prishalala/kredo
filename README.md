@@ -18,7 +18,7 @@ Built for the **UW Velocity × Stellar Blockchain Innovation Challenge 2026** (P
 | **Previous contract (v1, `is_fake` voting)** | `CAX4DIVMIOS4XXPG3HBVUVKSEHJLEETO52L4ZD7S4Z5NGCO2PL64GONI` |
 | **Bond token (native XLM SAC)** | `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 | **Network** | Testnet · RPC `https://soroban-testnet.stellar.org` |
-| **Live app** | _TODO (Person 4): add the URL_ |
+| **Live app** |kredo-stellar.vercel.app |
 | **Demo video** | _TODO: add the YouTube/Loom link_ |
 
 Every address and setting is in [`deployments/testnet.json`](deployments/testnet.json).
