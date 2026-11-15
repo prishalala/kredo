@@ -32,7 +32,7 @@ export default function Home({ go }: ScreenProps) {
             <div className="hcard">
               <div className="hc-row">
                 <span className="hc-icon">K</span>
-                <span className="grow"><strong>Verified Newcomer ID</strong><span className="mono tiny block muted">Issued by: settlement agency (demo)</span></span>
+                <span className="grow"><strong>Verified Newcomer ID</strong><span className="mono tiny block muted">Example · issued by a settlement agency</span></span>
                 <span className="chip gold mono"><span className="tdot gold" />Bond: 100 XLM</span>
               </div>
               <div className="tiles">
@@ -45,7 +45,7 @@ export default function Home({ go }: ScreenProps) {
             <div className="hcard">
               <div className="hc-row">
                 <span className="hc-icon blue"><CheckIcon /></span>
-                <span className="grow"><strong>Bank instant check</strong><span className="mono tiny block muted">Free read-only call to the contract</span></span>
+                <span className="grow"><strong>Bank instant check</strong><span className="mono tiny block muted">Example · free read-only call to the contract</span></span>
                 <span className="chip green mono">✓ Approved</span>
               </div>
               <dl className="rows">

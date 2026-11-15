@@ -47,3 +47,12 @@ V get_issuer @("--org", $d.agency)
 
 Write-Host "`n8. Organization B verifies again - expect verified:false, revoked:true"
 V verify @("--holder", $d.holder)
+
+Write-Host "`n9. Slashed issuer tries to issue again - expect Error(Contract, #1) BondTooLow (bond 50 < 100 XLM minimum)"
+$docHash2 = -join (1..32 | ForEach-Object { '{0:x2}' -f (Get-Random -Maximum 256) })
+$rc = K agency @("issue_credential", "--issuer", $d.agency, "--holder", $other, "--doc_hash", $docHash2, "--level", "2", "--method", "2")
+if ($rc -ne 0) { Write-Host "Rejected as expected" -ForegroundColor Green }
+
+Write-Host "`n10. Issuer tops its bond back up by 50 XLM"
+K agency @("top_up_bond", "--org", $d.agency, "--amount", "500000000") | Out-Null
+V get_issuer @("--org", $d.agency)

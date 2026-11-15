@@ -38,6 +38,10 @@ impl Kredo {
         issuer::register_issuer(&e, org, bond)
     }
 
+    pub fn top_up_bond(e: Env, org: Address, amount: i128) -> Result<(), Error> {
+        issuer::top_up_bond(&e, org, amount)
+    }
+
     /// `doc_hash` must be a keyed hash (synthetic in the prototype) — never a real document number.
     pub fn issue_credential(e: Env, issuer: Address, holder: Address, doc_hash: BytesN<32>, level: u32, method: u32) -> Result<(), Error> {
         issuer::issue_credential(&e, issuer, holder, doc_hash, level, method)

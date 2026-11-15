@@ -4,13 +4,14 @@
 import { Buffer } from "buffer";
 import { contract } from "@stellar/stellar-sdk";
 import { CONTRACT_ID, NETWORK_PASSPHRASE, RPC_URL, stroopsToXlm, xlmToStroops } from "../config";
-import { signTransaction } from "@stellar/freighter-api";
+import { getNetworkDetails, signTransaction } from "@stellar/freighter-api";
 import { KredoError } from "./types";
 import type { Dispute, Issuer, VerifyResult } from "./types";
 
 // Methods we call on the contract (names and inputs from CONTRACT.md).
 interface KredoMethods {
   register_issuer(a: { org: string; bond: bigint }): Promise<contract.AssembledTransaction<unknown>>;
+  top_up_bond(a: { org: string; amount: bigint }): Promise<contract.AssembledTransaction<unknown>>;
   issue_credential(a: { issuer: string; holder: string; doc_hash: Buffer; level: number; method: number }): Promise<contract.AssembledTransaction<unknown>>;
   verify(a: { holder: string }): Promise<contract.AssembledTransaction<RawVerify>>;
   get_issuer(a: { org: string }): Promise<contract.AssembledTransaction<unknown>>;
@@ -66,10 +67,27 @@ function unwrap<T>(r: unknown): T | null {
   return r as T;
 }
 
+// The app shows a "View on stellar.expert" link for every transaction it sends.
+type TxListener = (hash: string) => void;
+let txListener: TxListener | null = null;
+export function onTransaction(listener: TxListener | null) { txListener = listener; }
+
+// Signing on the wrong network fails with an unclear error, so check Freighter first.
+async function requireTestnet() {
+  const net = await getNetworkDetails();
+  if (net.error) throw new Error(net.error.message ?? "Couldn't read Freighter's network.");
+  if (net.networkPassphrase !== NETWORK_PASSPHRASE) {
+    throw new Error(`Freighter is on ${net.network || "another network"}. Switch it to Testnet, then try again.`);
+  }
+}
+
 async function write(signer: string, call: (c: KredoMethods) => Promise<contract.AssembledTransaction<unknown>>) {
   try {
+    await requireTestnet();
     const tx = await call(await client(signer));
     const sent = await tx.signAndSend();
+    const hash = sent.sendTransactionResponse?.hash;
+    if (hash) txListener?.(hash);
     const r = sent.result as { isErr?: () => boolean; unwrapErr?: () => { code?: number } };
     if (r && typeof r.isErr === "function" && r.isErr()) {
       const code = r.unwrapErr?.().code;
@@ -83,6 +101,10 @@ async function write(signer: string, call: (c: KredoMethods) => Promise<contract
 
 export async function registerIssuer(org: string, bondXlm: number) {
   await write(org, (c) => c.register_issuer({ org, bond: xlmToStroops(bondXlm) }));
+}
+
+export async function topUpBond(org: string, amountXlm: number) {
+  await write(org, (c) => c.top_up_bond({ org, amount: xlmToStroops(amountXlm) }));
 }
 
 export async function issueCredential(issuer: string, holder: string, hash: Uint8Array, level: number, method: number) {

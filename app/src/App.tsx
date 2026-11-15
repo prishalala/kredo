@@ -6,6 +6,7 @@ import DisputePanel from "./screens/DisputePanel";
 import { connectWallet, short, watchAccount } from "./wallet";
 import { CONTRACT_ID, EXPLORER, USE_MOCK } from "./config";
 import { KredoError } from "./kredo/types";
+import { onTransaction } from "./kredo";
 import { PEOPLE, newDemoPeople } from "./personas";
 import { KredoMark } from "./icons";
 
@@ -26,12 +27,12 @@ export const STEPS: { key: StepKey; label: string; tab: Tab }[] = [
 ];
 
 type ToastKind = "success" | "error" | "info";
-interface Toast { id: number; kind: ToastKind; msg: string }
+interface Toast { id: number; kind: ToastKind; msg: string; link?: string }
 
 export interface ScreenProps {
   me: string;
   wallet: string;
-  notify: (msg: string, kind?: ToastKind) => void;
+  notify: (msg: string, kind?: ToastKind, link?: string) => void;
   // needsWallet = false for free read-only calls (e.g. the bank check).
   run: (fn: () => Promise<void>, busyLabel?: string, needsWallet?: boolean) => Promise<void>;
   busy: boolean;
@@ -66,11 +67,21 @@ export default function App() {
   const me = wallet || (USE_MOCK ? DEMO_AGENCY : "");
   const busy = busyLabel !== "";
 
-  const notify = (msg: string, kind: ToastKind = "success") => {
+  const notify = (msg: string, kind: ToastKind = "success", link?: string) => {
     const id = nextId.current++;
-    setToasts((t) => [...t.slice(-1), { id, kind, msg }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4500);
+    setToasts((t) => [...t.slice(-1), { id, kind, msg, link }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), link ? 9000 : 4500);
   };
+
+  // Every transaction the app sends gets a link to stellar.expert, as proof it's on-chain.
+  const [lastTx, setLastTx] = useState("");
+  useEffect(() => {
+    onTransaction((hash) => {
+      setLastTx(hash);
+      notify(`Confirmed on Stellar · tx ${hash.slice(0, 8)}…`, "info", `${EXPLORER}/tx/${hash}`);
+    });
+    return () => onTransaction(null);
+  }, []);
   const mark = (step: StepKey) => setDone((d) => ({ ...d, [step]: true }));
 
   // Follow account switches in Freighter (agency → bank → panelist) without reconnecting.
@@ -136,7 +147,7 @@ export default function App() {
           ))}
         </nav>
         <div className="nav-right">
-          <span className="status mono"><span className="led" aria-hidden="true" />Stellar Testnet{USE_MOCK ? " · demo mode" : ""}</span>
+          <span className="status mono"><span className="led" aria-hidden="true" />{USE_MOCK ? "Practice mode · not on-chain" : "Stellar Testnet"}</span>
           <button className="btn dark sm" onClick={onConnect} disabled={busy}>
             {wallet ? short(wallet) : "Connect wallet"}
           </button>
@@ -177,6 +188,10 @@ export default function App() {
         <div className="container foot-row">
           <span><span className="led" aria-hidden="true" />Stellar Testnet <span className="sep">|</span> Contract:{" "}
             <a href={`${EXPLORER}/contract/${CONTRACT_ID}`} target="_blank" rel="noreferrer">{short(CONTRACT_ID)}</a>
+            {lastTx && (<>
+              {" "}<span className="sep">|</span> Last tx:{" "}
+              <a href={`${EXPLORER}/tx/${lastTx}`} target="_blank" rel="noreferrer">{lastTx.slice(0, 8)}…</a>
+            </>)}
           </span>
           <span className="foot-links">
             <a href={REPO} target="_blank" rel="noreferrer">GitHub</a>
@@ -192,6 +207,7 @@ export default function App() {
         {toasts.map((t) => (
           <div key={t.id} className={`toast ${t.kind}`}>
             <span className="tdot" aria-hidden="true" />{t.msg}
+            {t.link && <a className="mono" href={t.link} target="_blank" rel="noreferrer">View on stellar.expert ↗</a>}
           </div>
         ))}
       </div>

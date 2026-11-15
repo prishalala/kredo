@@ -71,7 +71,7 @@ export const LEVEL_LABELS: Record<number, string> = {
 
 // Same names and numbers as the contract's Error enum.
 export const ERRORS: Record<number, string> = {
-  1: "The bond is below the 100 XLM minimum.",
+  1: "The bond is below the 100 XLM minimum. Top it up to keep issuing.",
   2: "This organization is already registered.",
   3: "Only a registered, bonded organization can do this.",
   4: "This organization has reached its vouching limit.",

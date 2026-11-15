@@ -5,7 +5,8 @@ Don't change a function name, input or output without telling the other pair.
 
 - Contract: Soroban (Rust), deployed on **Stellar Testnet**
 - Bond token: **testnet XLM** (native asset contract)
-- Contract ID (current, includes the dispute fixes): `CBDATTO6MSWR6OIEKNVPR6K53EMRDOZ6J2R52F3EPB3RDZIVMBSNIPG3`
+- Contract ID (current): `CBYTIURKLFULMQVYT37NCAU3F7PJ6NM6RCUDS3LMXWDLTQTLM3TKS6BU`
+- Contract ID (v3, before the minimum-bond check, don't use): `CBDATTO6MSWR6OIEKNVPR6K53EMRDOZ6J2R52F3EPB3RDZIVMBSNIPG3`
 - Contract ID (v2, before the dispute fixes, don't use): `CBRP3IODWPCHB5T7Q4EUOJTZXN7S2GN4IZN4FJASMKR4N6EYTB6IAZN4`
 - Contract ID (v1, old interface, still live): `CAX4DIVMIOS4XXPG3HBVUVKSEHJLEETO52L4ZD7S4Z5NGCO2PL64GONI`
 - XLM token contract ID: `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` ← from `stellar contract id asset --asset native --network testnet`
@@ -29,10 +30,12 @@ Everything below is already reflected in the rest of this file. Function names a
 | Errors | 1–15 | `+ BadMethod = 16`, `+ NotEnoughReviewers = 17` | Show "Invalid verification method" / "Not enough independent reviewers for this dispute" |
 | Split vote | — | No 2-vote majority → `outcome = 4` (Inconclusive): nothing changes, dispute closes, a new one can be opened | Show "Inconclusive — no penalty, can be re-disputed" |
 | Events | — | `+ ("dispute", "resolved") → (holder, outcome, slashed)` | Optional activity feed |
-| Contract ID | `CAX4…GONI` | `CBDATTO6MSWR6OIEKNVPR6K53EMRDOZ6J2R52F3EPB3RDZIVMBSNIPG3` | **Regenerate TS bindings** after redeploy |
+| Contract ID | `CAX4…GONI` | `CBYTIURKLFULMQVYT37NCAU3F7PJ6NM6RCUDS3LMXWDLTQTLM3TKS6BU` | The app reads the interface from testnet; just update `CONTRACT_ID` in `app/src/config.ts` |
+| New function | — | `top_up_bond(org, amount)` | "Top up bond" in the Issuer portal |
+| `issue_credential` rule | — | Issuer's bond must be ≥ `min_bond`, else `BondTooLow (1)` | Show "top up to keep issuing" |
 
 Regenerate the client:
-`stellar contract bindings typescript --network testnet --contract-id CBDATTO6MSWR6OIEKNVPR6K53EMRDOZ6J2R52F3EPB3RDZIVMBSNIPG3 --output-dir app/kredo-client`
+`stellar contract bindings typescript --network testnet --contract-id CBYTIURKLFULMQVYT37NCAU3F7PJ6NM6RCUDS3LMXWDLTQTLM3TKS6BU --output-dir app/kredo-client`
 
 ---
 
@@ -120,6 +123,7 @@ One credential per holder. Credentials, issuers and disputes are stored by `hold
 |---|----------|--------|---------|--------------|-------|
 | 1 | `initialize` | `admin: Address, token: Address, panel: Vec<Address>, min_bond: i128, max_vouches: u32, slash_percent: u32` | — | Admin, once after deploy | Person 1 |
 | 2 | `register_issuer` | `org: Address, bond: i128` | — | Organization | Person 1 |
+| 2b | `top_up_bond` | `org: Address, amount: i128` | — | Organization (adds to its bond) | Person 1 |
 | 3 | `issue_credential` | `issuer: Address, holder: Address, doc_hash: BytesN<32>, level: u32, method: u32` | — | Organization | Person 1 |
 | 4 | `verify` | `holder: Address` | `VerifyResult` | Bank (read-only, free) | Person 1 |
 | 5 | `get_issuer` | `org: Address` | `Issuer` | Anyone (read-only) | Person 1 |
@@ -140,6 +144,7 @@ One credential per holder. Credentials, issuers and disputes are stored by `hold
 **`issue_credential`**
 - `issuer.require_auth()`
 - Issuer is registered and active, else `Error::NotIssuer`
+- Issuer's bond ≥ `min_bond` (a slashed issuer must top up first), else `Error::BondTooLow`
 - `active_vouches < max_vouches`, else `Error::VouchLimitReached`
 - `doc_hash` never used before, else `Error::DuplicateId`  ← the duplicate check (stays blocked even after a revoke)
 - Holder has no credential yet, else `Error::AlreadyHasCredential`
@@ -170,6 +175,12 @@ One credential per holder. Credentials, issuers and disputes are stored by `hold
   - `Valid` → close dispute, nothing else changes
 - No 2-vote majority after every eligible panelist has voted (1-1-1, or 1-1 with two eligible) → **Inconclusive** (`outcome = 4`): no revoke, no slash, **not** Valid. The dispute closes so the holder isn't locked forever; anyone can open a new dispute (e.g. with new evidence) to escalate
 - On resolve: `resolved = true`, `outcome` set, `slashed` set
+
+**`top_up_bond`**
+- `org.require_auth()`
+- Issuer is registered and active, else `Error::NotIssuer`
+- `amount > 0`, else `Error::BondTooLow`
+- Transfer `amount` XLM from `org` to the contract, `bond += amount`
 
 **`release_bond`**
 - `org.require_auth()`
@@ -203,6 +214,7 @@ pub enum Error {
 ### Events (so the app can show activity)
 
 - `("issuer", "registered")` → `(org, bond)`
+- `("issuer", "topped_up")` → `(org, amount, bond)`
 - `("cred", "issued")` → `(holder, issuer, level)`
 - `("cred", "revoked")` → `(holder, issuer, slashed_amount)` — `slashed_amount` is 0 for `PersonDeception`
 - `("dispute", "opened")` → `(holder, opened_by)`
