@@ -23,7 +23,7 @@ Built for the **UW Velocity × Stellar Blockchain Innovation Challenge 2026** (P
 
 Every address and setting is in [`deployments/testnet.json`](deployments/testnet.json).
 
-### End-to-end demo, already run on testnet
+### End-to-end demo, already run on testnet 
 
 Run with `scripts\demo.ps1` on the current contract (`CBYTIURK…`). The doc hash is synthetic (random bytes).
 
