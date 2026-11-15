@@ -163,7 +163,7 @@ Freighter accounts for a real run: the agency (use `agency2`, created by `deploy
 
 These parts are not built. They're presented on the trifold and in the pitch:
 - Passport NFC chip reading and live selfie match. The "Verify ID" button is **simulated** and always succeeds.
-- The keyed-hash service (the demo uses synthetic hashes).
+- The keyed-hash service (the demo uses synthetic hashes). 
 - Passkey wallet (the demo uses Freighter), PIN card for people without a phone.
 - Trust limits that grow over time, and a reward to the voucher when the bond is released.
 
