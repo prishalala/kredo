@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getIssuer, issueCredential, registerIssuer, releaseBond } from "../kredo";
+import { getIssuer, issueCredential, registerIssuer, releaseBond, topUpBond } from "../kredo";
 import { docHash, toHex } from "../kredo/hash";
 import type { Issuer } from "../kredo/types";
 import { LEVEL_LABELS, METHODS } from "../kredo/types";
@@ -61,6 +61,14 @@ export default function IssuerPortal({ me, notify, run, busy, mark, holder, setH
       notify(`Credential issued to ${person?.name ?? short(holder)}`);
     }, "Issuing credential on Stellar…");
 
+  const [topUp, setTopUp] = useState(50);
+  const onTopUp = () =>
+    run(async () => {
+      await topUpBond(me, topUp);
+      await refresh();
+      notify(`Added ${topUp} XLM to your bond`);
+    }, `Adding ${topUp} XLM to your bond…`);
+
   const onRelease = () =>
     run(async () => {
       await releaseBond(me);
@@ -70,6 +78,7 @@ export default function IssuerPortal({ me, notify, run, busy, mark, holder, setH
 
   const registered = !!issuer?.active;
   const used = issuer?.activeVouches ?? 0;
+  const belowMin = registered && issuer!.bond < MIN_BOND_XLM;
 
   return (
     <div className="grid2">
@@ -98,12 +107,20 @@ export default function IssuerPortal({ me, notify, run, busy, mark, holder, setH
               <label htmlFor="bond">Bond amount (XLM)</label>
               <input id="bond" type="number" min={0} value={bond} onChange={(e) => setBond(Number(e.target.value))} />
               <p className="hint">Minimum {MIN_BOND_XLM} XLM</p>
-              <button className="btn dark" disabled={busy} onClick={onRegister}>Lock bond &amp; register</button>
+              <button className="btn dark" disabled={busy || !(bond >= MIN_BOND_XLM)} onClick={onRegister}>Lock bond &amp; register</button>
             </>
           ) : (
             <>
               <h2>You're a bonded issuer</h2>
               <p className="muted">Every credential you issue is backed by your bond.</p>
+              {belowMin && (
+                <p className="hint clay-text">Your bond is below the {MIN_BOND_XLM} XLM minimum after a slash. Top it up to issue new credentials.</p>
+              )}
+              <label htmlFor="topup">Add to bond (XLM)</label>
+              <div className="row">
+                <input id="topup" type="number" min={1} value={topUp} onChange={(e) => setTopUp(Number(e.target.value))} />
+                <button className="btn dark" disabled={busy || !(topUp > 0)} onClick={onTopUp}>Top up bond</button>
+              </div>
               <button className="btn ghost" disabled={busy || used > 0} onClick={onRelease}>Release bond</button>
               {used > 0 && <p className="hint">Release unlocks once you're no longer backing anyone.</p>}
             </>

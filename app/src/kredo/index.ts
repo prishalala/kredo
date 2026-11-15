@@ -7,6 +7,8 @@ import * as real from "./real";
 const api = USE_MOCK ? mock : real;
 
 export const registerIssuer = api.registerIssuer;
+export const topUpBond = api.topUpBond;
+export const onTransaction = api.onTransaction;
 export const issueCredential = api.issueCredential;
 export const verify = api.verify;
 export const getIssuer = api.getIssuer;

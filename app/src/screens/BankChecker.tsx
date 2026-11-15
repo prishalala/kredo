@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { StrKey } from "@stellar/stellar-sdk";
 import { verify } from "../kredo";
 import type { VerifyResult } from "../kredo/types";
 import { LEVEL_LABELS, METHODS } from "../kredo/types";
@@ -15,15 +16,20 @@ export default function BankChecker({ run, busy, mark, notify, holder, setHolder
   const [checked, setChecked] = useState("");
   const person = personaFor(checked);
 
-  const onCheck = () =>
-    run(async () => {
-      const res = await verify(holder);
+  const onCheck = () => {
+    if (!StrKey.isValidEd25519PublicKey(holder.trim())) {
+      notify("That isn't a valid Stellar address. It starts with G and is 56 characters long.", "error");
+      return;
+    }
+    return run(async () => {
+      const res = await verify(holder.trim());
       setR(res);
       setChecked(holder);
       if (res.verified) { mark("verify"); notify("Credential verified"); }
       else if (res.revoked) { mark("revoke"); notify("This credential has been revoked", "info"); }
       else notify("No Kredo credential found", "info");
     }, "Reading credential from Stellar…", false); // read-only: no wallet needed
+  };
 
   const status = !r ? null : r.verified ? (r.disputeOpen ? "review" : "ok") : r.revoked ? "revoked" : "none";
 

@@ -21,10 +21,21 @@ export async function registerIssuer(org: string, bondXlm: number) {
   issuers.set(org, { org, bond: bondXlm, activeVouches: 0, active: true });
 }
 
+export async function topUpBond(org: string, amountXlm: number) {
+  await wait();
+  const iss = issuers.get(org);
+  if (!iss || !iss.active) throw new KredoError(3);
+  if (!(amountXlm > 0)) throw new KredoError(1);
+  iss.bond += amountXlm;
+}
+
+export function onTransaction() { /* practice mode sends no transactions */ }
+
 export async function issueCredential(issuer: string, holder: string, hash: Uint8Array, level: number, method: number) {
   await wait();
   const iss = issuers.get(issuer);
   if (!iss || !iss.active) throw new KredoError(3);
+  if (iss.bond < MIN_BOND_XLM) throw new KredoError(1);
   if (iss.activeVouches >= MAX_VOUCHES) throw new KredoError(4);
   const hex = toHex(hash);
   if (usedHashes.has(hex)) throw new KredoError(5);

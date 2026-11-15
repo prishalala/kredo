@@ -385,3 +385,49 @@ fn full_happy_path_receipt() {
     assert_eq!(v.issuer_bond, 50 * XLM);
     assert_eq!(t.c.get_issuer(&t.org).bond, 50 * XLM);
 }
+
+// ---------- bond after a slash ----------
+
+/// Org registered, one credential revoked for negligence: bond 100 -> 50 XLM.
+fn slashed<'a>() -> T<'a> {
+    let (t, holder) = issued();
+    t.c.open_dispute(&t.bank, &holder);
+    t.c.vote(&t.p[0], &holder, &Outcome::IssuerNegligence);
+    t.c.vote(&t.p[1], &holder, &Outcome::IssuerNegligence);
+    assert_eq!(t.c.get_issuer(&t.org).bond, 50 * XLM);
+    t
+}
+
+#[test]
+fn slashed_issuer_cannot_issue_until_topped_up() {
+    let t = slashed();
+    let next = Address::generate(&t.e);
+    assert_eq!(t.c.try_issue_credential(&t.org, &next, &h(&t.e, 2), &2, &2), Err(Ok(Error::BondTooLow)));
+
+    let before = t.xlm.balance(&t.org);
+    t.c.top_up_bond(&t.org, &(50 * XLM));
+    assert_eq!(t.xlm.balance(&t.org), before - 50 * XLM); // real XLM moved
+    assert_eq!(t.c.get_issuer(&t.org).bond, MIN_BOND);
+    t.c.issue_credential(&t.org, &next, &h(&t.e, 2), &2, &2);
+    assert!(t.c.verify(&next).verified);
+}
+
+#[test]
+fn top_up_rules() {
+    let t = setup(5);
+    assert_eq!(t.c.try_top_up_bond(&t.org, &XLM), Err(Ok(Error::NotIssuer))); // not registered
+    t.c.register_issuer(&t.org, &MIN_BOND);
+    assert_eq!(t.c.try_top_up_bond(&t.org, &0), Err(Ok(Error::BondTooLow)));
+    t.c.top_up_bond(&t.org, &(10 * XLM));
+    assert_eq!(t.c.get_issuer(&t.org).bond, 110 * XLM);
+}
+
+#[test]
+#[should_panic]
+fn release_bond_needs_org_signature() {
+    // Nobody else can pull an org's bond out: without the org's signature it fails.
+    let t = setup(5);
+    t.c.register_issuer(&t.org, &MIN_BOND);
+    t.e.set_auths(&[]);
+    t.c.release_bond(&t.org);
+}

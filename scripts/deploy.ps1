@@ -27,6 +27,7 @@ $p3     = Ensure-Key "panel3"
 $agency = Ensure-Key "agency"   # Organization A (issuer)
 $bank   = Ensure-Key "bank"     # Organization B (verifier)
 $holder = Ensure-Key "holder"   # demo credential holder
+$agency2 = Ensure-Key "agency2" # fresh issuer for the app demo / video (import into Freighter)
 
 # 3. Native XLM Stellar Asset Contract (the bond token)
 $XLM = (stellar contract id asset --asset native --network $NET).Trim(); Run "asset id"
@@ -48,7 +49,7 @@ $out = [ordered]@{
   network = $NET; rpcUrl = "https://soroban-testnet.stellar.org"
   networkPassphrase = "Test SDF Network ; September 2015"
   contractId = $ID; xlmTokenId = $XLM
-  admin = $admin; panel = @($p1, $p2, $p3); agency = $agency; bank = $bank; holder = $holder
+  admin = $admin; panel = @($p1, $p2, $p3); agency = $agency; agency2 = $agency2; bank = $bank; holder = $holder
 }
 New-Item -ItemType Directory -Force deployments | Out-Null
 $out | ConvertTo-Json | Set-Content deployments\testnet.json

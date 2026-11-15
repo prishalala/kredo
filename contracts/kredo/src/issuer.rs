@@ -1,4 +1,4 @@
-//! Person 1 — initialize, register_issuer, issue_credential, verify.
+//! Person 1 — initialize, register_issuer, top_up_bond, issue_credential, verify.
 use crate::errors::Error;
 use crate::storage::*;
 use crate::types::*;
@@ -48,6 +48,26 @@ pub fn register_issuer(e: &Env, org: Address, bond: i128) -> Result<(), Error> {
     Ok(())
 }
 
+/// Add more XLM to an existing issuer's bond (e.g. after a slash took it below min_bond).
+pub fn top_up_bond(e: &Env, org: Address, amount: i128) -> Result<(), Error> {
+    org.require_auth();
+    let cfg = config(e);
+    let mut iss = match load_issuer(e, &org) {
+        Some(i) if i.active => i,
+        _ => return Err(Error::NotIssuer),
+    };
+    if amount <= 0 {
+        return Err(Error::BondTooLow);
+    }
+    // Real XLM transfer: org -> this contract.
+    token::Client::new(e, &cfg.token).transfer(&org, &e.current_contract_address(), &amount);
+    iss.bond += amount;
+    save_issuer(e, &iss);
+    bump_instance(e);
+    BondToppedUp { org, amount, bond: iss.bond }.publish(e);
+    Ok(())
+}
+
 pub fn issue_credential(e: &Env, issuer: Address, holder: Address, doc_hash: BytesN<32>, level: u32, method: u32) -> Result<(), Error> {
     issuer.require_auth();
     let cfg = config(e);
@@ -55,6 +75,10 @@ pub fn issue_credential(e: &Env, issuer: Address, holder: Address, doc_hash: Byt
         Some(i) if i.active => i,
         _ => return Err(Error::NotIssuer),
     };
+    // A slashed issuer must top its bond back up to the minimum before vouching for anyone new.
+    if iss.bond < cfg.min_bond {
+        return Err(Error::BondTooLow);
+    }
     if iss.active_vouches >= cfg.max_vouches {
         return Err(Error::VouchLimitReached);
     }

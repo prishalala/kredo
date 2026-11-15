@@ -94,6 +94,9 @@ use soroban_sdk::contractevent;
 #[contractevent(topics = ["issuer", "registered"], data_format = "vec")]
 pub struct IssuerRegistered { pub org: Address, pub bond: i128 }
 
+#[contractevent(topics = ["issuer", "topped_up"], data_format = "vec")]
+pub struct BondToppedUp { pub org: Address, pub amount: i128, pub bond: i128 }
+
 #[contractevent(topics = ["cred", "issued"], data_format = "vec")]
 pub struct CredIssued { pub holder: Address, pub issuer: Address, pub level: u32 }
 
