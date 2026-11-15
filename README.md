@@ -1,4 +1,4 @@
-# Kredo — Reusable, Bonded Identity on Stellar
+# Kredo - Reusable, Bonded Identity on Stellar
 
 > Get verified once, reuse it anywhere, and have the verifier put real money behind it.
 
