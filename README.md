@@ -198,7 +198,7 @@ Developed the on-chain dispute resolution system, including independent panel vo
 Implemented credential revocation, negligence-based bond slashing, and bond release.
 Created automated smart contract tests and helped validate end-to-end blockchain functionality.
 
-- **Naandika — Issuer Portal & Bank Checker**
+- **Naandikaa — Issuer Portal & Bank Checker**
 
 Developed the frontend for issuer registration, simulated identity verification, and reusable credential issuance.
 Built the Bank Checker and Verification Receipt interface, displaying issuer information, trust levels, bond status, and verification outcomes.
