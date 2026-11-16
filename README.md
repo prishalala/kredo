@@ -185,4 +185,27 @@ app/                   React + TypeScript frontend
 ```
 
 ## Team
-_TODO: names and roles._ Contract core · Disputes and tests · Issuer and bank screens · Dispute panel and integration.
+
+- **Prisha — Smart Contract Core & Deployment**
+
+Developed the Rust/Soroban smart contract for issuer registration, XLM bonding, credential issuance, and verification.
+Implemented duplicate-credential detection, trust levels, vouching limits, and bond management.
+Deployed the contract to Stellar Testnet and documented its functionality.
+
+- **Shreeya — Dispute Resolution & Smart Contract Testing**
+
+Developed the on-chain dispute resolution system, including independent panel voting and conflict-of-interest protections.
+Implemented credential revocation, negligence-based bond slashing, and bond release.
+Created automated smart contract tests and helped validate end-to-end blockchain functionality.
+
+- **Naandika — Issuer Portal & Bank Checker**
+
+Developed the frontend for issuer registration, simulated identity verification, and reusable credential issuance.
+Built the Bank Checker and Verification Receipt interface, displaying issuer information, trust levels, bond status, and verification outcomes.
+Integrated frontend workflows with the Stellar smart contract.
+
+- **Jyotika — Dispute Panel, Wallet Integration & UI**
+
+Developed the Dispute Panel interface for submitting disputes, voting, and viewing outcomes.
+Integrated Freighter wallet connectivity and Stellar transaction signing.
+Contributed to the application's interface, transaction feedback, and end-to-end integration.
